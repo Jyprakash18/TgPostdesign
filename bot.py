@@ -1,270 +1,122 @@
+import os
+import io
 import asyncio
+import urllib.request
+from aiohttp import web
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile
-from playwright.async_api import async_playwright
+from PIL import Image, ImageDraw, ImageFont
 
 # ==========================================
-# ⚙️ CONFIGURATION (Yahan Apni Details Dalein)
+# ⚙️ CONFIGURATION (Apni Details Yahan Dalein)
 # ==========================================
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
-CHANNEL_ID = "@your_channel_username"          # Channel @username ya ID (e.g., -100123456789)
-CHANNEL_TITLE = "🎬 MOVIE HUB"                 # Banner ka main title
-POST_TITLE = "ALL YOUR ENTERTAINMENT IN ONE PLACE"  # Banner ka subtitle
-PREMIUM_URL = "https://t.me/your_premium_link" # Jahan user click karke jayega
-BANNER_BG_URL = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=800"
+BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
+CHANNEL_ID = os.getenv("CHANNEL_ID", "@your_channel_username")
+CHANNEL_TITLE = "MOVIE HUB"
+POST_TITLE = "ALL YOUR ENTERTAINMENT IN ONE PLACE"
+PREMIUM_URL = "https://t.me/your_premium_link"
 # ==========================================
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-def generate_html(include_fake_buttons: bool = True) -> str:
-    """HTML/CSS template jo Movie Hub jaisa exact UI card banata hai"""
-    fake_buttons_section = ""
+def get_font(size: int, bold: bool = True):
+    """Linux (Render) aur Windows dono ke liye clean font loader"""
+    font_paths = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "arialbd.ttf" if bold else "arial.ttf"
+    ]
+    for path in font_paths:
+        if os.path.exists(path):
+            return ImageFont.truetype(path, size)
+    return ImageFont.load_default()
+
+def generate_card_image(include_fake_buttons: bool = True) -> bytes:
+    """Pillow se Movie Hub style card RAM mein generate karta hai"""
+    width = 600
+    height = 780 if include_fake_buttons else 420
+    bg_color = "#17212b"
+    card_bg = "#131c26"
+    border_col = "#24303f"
+
+    img = Image.new("RGB", (width, height), bg_color)
+    draw = ImageDraw.Draw(img)
+
+    font_h1 = get_font(34, True)
+    font_sub = get_font(16, True)
+    font_title = get_font(18, True)
+    font_desc = get_font(14, False)
+    font_btn = get_font(17, True)
+
+    # 1. Top Banner Box
+    draw.rounded_rectangle([20, 20, 580, 200], radius=18, fill="#0d141c", outline="#2b394a", width=2)
+    draw.text((45, 55), f"🎬 {CHANNEL_TITLE}", fill="#ffffff", font=font_h1)
+    draw.text((45, 105), POST_TITLE, fill="#93c5fd", font=font_sub)
+    draw.rounded_rectangle([45, 145, 130, 151], radius=3, fill="#3b82f6")
+
+    # 2. Row 1: Two Cards (Browse Movies | Video Quality)
+    # Left Card
+    draw.rounded_rectangle([20, 215, 292, 300], radius=14, fill=card_bg, outline=border_col, width=2)
+    draw.rounded_rectangle([35, 232, 85, 282], radius=10, fill="#2563eb")
+    draw.text((50, 245), "🎬", fill="#ffffff", font=font_title)
+    draw.text((100, 235), "Browse Movies", fill="#ffffff", font=font_title)
+    draw.text((100, 260), "Find your next watch", fill="#7f91a4", font=font_desc)
+    draw.text((268, 245), ">", fill="#5c6c7c", font=font_title)
+
+    # Right Card
+    draw.rounded_rectangle([308, 215, 580, 300], radius=14, fill=card_bg, outline=border_col, width=2)
+    draw.rounded_rectangle([323, 232, 373, 282], radius=10, fill="#2563eb")
+    draw.text((338, 245), "TV", fill="#ffffff", font=font_title)
+    draw.text((388, 235), "Video Quality", fill="#ffffff", font=font_title)
+    draw.text((388, 260), "View available formats", fill="#7f91a4", font=font_desc)
+    draw.text((555, 245), ">", fill="#5c6c7c", font=font_title)
+
+    # 3. Row 2: Full Width Card (Premium Membership)
+    draw.rounded_rectangle([20, 315, 580, 400], radius=14, fill=card_bg, outline=border_col, width=2)
+    draw.rounded_rectangle([35, 332, 85, 382], radius=10, fill="#7c3aed")
+    draw.text((48, 345), "VIP", fill="#ffffff", font=font_sub)
+    draw.text((100, 335), "Premium Membership", fill="#ffffff", font=font_title)
+    draw.text((100, 360), "See plans and benefits", fill="#7f91a4", font=font_desc)
+    draw.text((555, 345), ">", fill="#5c6c7c", font=font_title)
+
+    # 4. Optional Fake Buttons Section (For /post_fullcard)
     if include_fake_buttons:
-        fake_buttons_section = """
-        <div class="divider"></div>
-        <div class="cta-title">🚀 Get Full Access Now ⤵️</div>
-        <div class="btn btn-pink">✨ 🎬 JOIN FREE 🪽 ✨ <span class="square-icon">▢</span></div>
-        <div class="btn btn-green">✨ 🎬 START HERE 🪽 ✨ <span class="square-icon">▢</span></div>
-        <div class="btn btn-blue">✨ 🎬 UNLOCK VIP 🪽 ✨ <span class="square-icon">▢</span></div>
-        <div class="btn btn-pink">✨ 🎬 EXPLORE 🪽 ✨ <span class="square-icon">▢</span></div>
-        <div class="btn btn-green">✨ 🎬 JOIN CLUB 🪽 ✨ <span class="square-icon">▢</span></div>
-        <div class="footer">
-          <div class="reactions">
-            <span class="react">🍿 2</span>
-            <span class="react">👍 2</span>
-            <span class="react">❤️ 1</span>
-          </div>
-          <div class="views">👁️ 8,932 &nbsp; 🕒 5:17 AM</div>
-        </div>
-        """
+        draw.line([(0, 420), (600, 420)], fill="#232e3c", width=2)
+        draw.text((30, 438), "Get Full Access Now 👇", fill="#ffffff", font=get_font(22, True))
 
-    return f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <meta charset="UTF-8">
-    <style>
-      body {{
-        margin: 0;
-        padding: 0;
-        background-color: #17212b;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
-      }}
-      .tg-post {{
-        width: 500px;
-        background-color: #17212b;
-        padding: 16px;
-        color: white;
-        box-sizing: border-box;
-      }}
-      .banner {{
-        width: 100%;
-        height: 190px;
-        border-radius: 14px;
-        background: linear-gradient(90deg, #0b1117 42%, rgba(11,17,23,0.15)), 
-                    url('{BANNER_BG_URL}') center/cover;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        padding-left: 22px;
-        box-sizing: border-box;
-        margin-bottom: 14px;
-        border: 1px solid #232e3c;
-      }}
-      .banner h1 {{
-        margin: 0;
-        font-size: 30px;
-        font-weight: 900;
-        letter-spacing: 1px;
-        color: #ffffff;
-        text-shadow: 0 0 14px rgba(59, 130, 246, 0.8);
-      }}
-      .banner p {{
-        margin: 8px 0 14px 0;
-        font-size: 14px;
-        color: #93c5fd;
-        font-weight: 700;
-        max-width: 260px;
-        line-height: 1.35;
-      }}
-      .line {{
-        width: 65px;
-        height: 4px;
-        background: #3b82f6;
-        border-radius: 2px;
-      }}
-      .grid-row {{
-        display: flex;
-        gap: 10px;
-        margin-bottom: 10px;
-      }}
-      .card {{
-        background-color: #131c26;
-        border: 1px solid #24303f;
-        border-radius: 14px;
-        padding: 12px 14px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        flex: 1;
-      }}
-      .card-left {{
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }}
-      .icon-box {{
-        width: 44px;
-        height: 44px;
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 22px;
-      }}
-      .blue-icon {{ background: linear-gradient(135deg, #3b82f6, #1d4ed8); }}
-      .purple-icon {{ background: linear-gradient(135deg, #8b5cf6, #6d28d9); }}
-      .card-title {{ font-size: 15px; font-weight: 700; margin: 0; color: #f8fafc; }}
-      .card-sub {{ font-size: 12px; color: #7f91a4; margin: 3px 0 0 0; }}
-      .arrow {{ color: #5c6c7c; font-size: 22px; font-weight: bold; }}
-      .divider {{
-        height: 1px;
-        background: #232e3c;
-        margin: 16px -16px;
-      }}
-      .cta-title {{
-        font-size: 20px;
-        font-weight: 700;
-        margin: 6px 0 16px 6px;
-      }}
-      .btn {{
-        width: 90%;
-        margin: 0 auto 10px auto;
-        padding: 13px 18px;
-        border-radius: 30px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 800;
-        font-size: 15px;
-        letter-spacing: 0.6px;
-        position: relative;
-        box-sizing: border-box;
-      }}
-      .btn-pink {{
-        background: rgba(131, 56, 75, 0.35);
-        border: 1.5px solid #7c3548;
-        color: #f472b6;
-      }}
-      .btn-green {{
-        background: rgba(20, 83, 45, 0.45);
-        border: 1.5px solid #16a34a;
-        color: #4ade80;
-      }}
-      .btn-blue {{
-        background: #1d9bf0;
-        border: 1.5px solid #38bdf8;
-        color: #ffffff;
-      }}
-      .square-icon {{
-        position: absolute;
-        right: 18px;
-        font-size: 14px;
-      }}
-      .footer {{
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-top: 16px;
-        padding-top: 4px;
-      }}
-      .reactions {{ display: flex; gap: 8px; }}
-      .react {{
-        background: #202b36;
-        padding: 5px 12px;
-        border-radius: 20px;
-        font-size: 13px;
-        font-weight: 600;
-        color: #e2e8f0;
-      }}
-      .views {{ font-size: 12px; color: #6c7883; }}
-    </style>
-    </head>
-    <body>
-    <div class="tg-post" id="card">
-      <div class="banner">
-        <h1>{CHANNEL_TITLE}</h1>
-        <p>{POST_TITLE}</p>
-        <div class="line"></div>
-      </div>
+        buttons = [
+            ("JOIN FREE", "#3b202c", "#7c3548", "#f472b6"),
+            ("START HERE", "#143325", "#16a34a", "#4ade80"),
+            ("UNLOCK VIP", "#1d9bf0", "#38bdf8", "#ffffff"),
+            ("EXPLORE", "#3b202c", "#7c3548", "#f472b6"),
+            ("JOIN CLUB", "#143325", "#16a34a", "#4ade80"),
+        ]
 
-      <div class="grid-row">
-        <div class="card">
-          <div class="card-left">
-            <div class="icon-box blue-icon">🎬</div>
-            <div>
-              <p class="card-title">Browse Movies</p>
-              <p class="card-sub">Find your next watch</p>
-            </div>
-          </div>
-          <span class="arrow">›</span>
-        </div>
+        y_start = 485
+        for label, bg_btn, border_btn, txt_col in buttons:
+            draw.rounded_rectangle([55, y_start, 545, y_start + 46], radius=23, fill=bg_btn, outline=border_btn, width=2)
+            text_str = f"✨  {label}  ✨"
+            bbox = draw.textbbox((0, 0), text_str, font=font_btn)
+            tw = bbox[2] - bbox[0]
+            draw.text(((width - tw) // 2, y_start + 12), text_str, fill=txt_col, font=font_btn)
+            draw.rectangle([510, y_start + 17, 522, y_start + 29], outline=txt_col, width=2)
+            y_start += 56
 
-        <div class="card">
-          <div class="card-left">
-            <div class="icon-box blue-icon">🖥️</div>
-            <div>
-              <p class="card-title">Video Quality</p>
-              <p class="card-sub">View available formats</p>
-            </div>
-          </div>
-          <span class="arrow">›</span>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-left">
-          <div class="icon-box purple-icon">👑</div>
-          <div>
-            <p class="card-title">Premium Membership</p>
-            <p class="card-sub">See plans and benefits</p>
-          </div>
-        </div>
-        <span class="arrow">›</span>
-      </div>
-
-      {fake_buttons_section}
-    </div>
-    </body>
-    </html>
-    """
-
-async def render_html_to_image(include_fake_buttons: bool) -> bytes:
-    """Playwright se HTML ko HD PNG bytes mein convert karta hai"""
-    html_content = generate_html(include_fake_buttons)
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page(viewport={"width": 500, "height": 900}, device_scale_factor=2)
-        await page.set_content(html_content, wait_until="networkidle")
-        card_element = await page.query_selector("#card")
-        image_bytes = await card_element.screenshot(type="png")
-        await browser.close()
-        return image_bytes
+    output = io.BytesIO()
+    img.save(output, format="PNG")
+    return output.getvalue()
 
 # ==========================================================
-# 🚀 COMMAND 1: /post_clickable (Photo + 5 Real Buttons)
+# 🚀 COMMAND 1: /post_clickable (Header Image + 5 Real Buttons)
 # ==========================================================
 @dp.message(Command("post_clickable"))
 async def send_clickable_post(message: types.Message):
-    status_msg = await message.reply("⏳ <b>Generating Clickable Post...</b>", parse_mode="HTML")
+    status = await message.reply("⏳ Generating Clickable Post...")
     try:
-        # Sirf Upar ke Banner + 3 Cards ki photo banayega
-        img_bytes = await render_html_to_image(include_fake_buttons=False)
-        photo = BufferedInputFile(img_bytes, filename="post_header.png")
+        img_bytes = generate_card_image(include_fake_buttons=False)
+        photo = BufferedInputFile(img_bytes, filename="header.png")
 
-        # 5 Asli Clickable Telegram Buttons
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="✨ 🎬 JOIN FREE 🪽 ✨", url=PREMIUM_URL)],
             [InlineKeyboardButton(text="✨ 🎬 START HERE 🪽 ✨", url=PREMIUM_URL)],
@@ -280,24 +132,22 @@ async def send_clickable_post(message: types.Message):
             parse_mode="HTML",
             reply_markup=keyboard
         )
-        await status_msg.edit_text("✅ <b>Clickable Post Successfully Sent to Channel!</b>", parse_mode="HTML")
+        await status.edit_text("✅ Clickable Post Sent to Channel!")
     except Exception as e:
-        await status_msg.edit_text(f"❌ Error: {e}")
+        await status.edit_text(f"❌ Error: {e}")
 
 # ==========================================================
-# 🎨 COMMAND 2: /post_fullcard (Exact Screenshot Image)
+# 🎨 COMMAND 2: /post_fullcard (Full Card + 1 Main Button)
 # ==========================================================
 @dp.message(Command("post_fullcard"))
 async def send_fullcard_post(message: types.Message):
-    status_msg = await message.reply("⏳ <b>Generating Full Graphic Card...</b>", parse_mode="HTML")
+    status = await message.reply("⏳ Generating Full Card Post...")
     try:
-        # Pura card (colorful buttons ke saath) ek single image mein banayega
-        img_bytes = await render_html_to_image(include_fake_buttons=True)
-        photo = BufferedInputFile(img_bytes, filename="movie_hub_full.png")
+        img_bytes = generate_card_image(include_fake_buttons=True)
+        photo = BufferedInputFile(img_bytes, filename="fullcard.png")
 
-        # Neeche 1 Main Clickable Button
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="👉 С L I С K   H E R E   T O   J O I N 👈", url=PREMIUM_URL)]
+            [InlineKeyboardButton(text="👉 С L I С K   H E R E 👈", url=PREMIUM_URL)]
         ])
 
         await bot.send_photo(
@@ -305,12 +155,28 @@ async def send_fullcard_post(message: types.Message):
             photo=photo,
             reply_markup=keyboard
         )
-        await status_msg.edit_text("✅ <b>Full Card Post Successfully Sent to Channel!</b>", parse_mode="HTML")
+        await status.edit_text("✅ Full Card Sent to Channel!")
     except Exception as e:
-        await status_msg.edit_text(f"❌ Error: {e}")
+        await status.edit_text(f"❌ Error: {e}")
+
+# ==========================================================
+# 🌐 RENDER DUMMY WEB SERVER (Keep-Alive Port Binding)
+# ==========================================================
+async def handle_ping(request):
+    return web.Response(text="Bot is running smoothly on Render!")
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle_ping)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 10000))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    print(f"🌐 Web server listening on port {port}")
 
 async def main():
-    print("🤖 Bot chalu ho gaya hai! Apne bot ko /post_clickable ya /post_fullcard bhejein.")
+    await start_web_server()
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
