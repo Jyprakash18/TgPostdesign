@@ -4,14 +4,14 @@ import asyncio
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile
+from aiogram.types import BufferedInputFile, LinkPreviewOptions
 from PIL import Image, ImageDraw, ImageFont
 
 # ==========================================
 # ⚙️ CONFIGURATION (Apni Details Yahan Dalein)
 # ==========================================
 BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
-CHANNEL_ID = os.getenv("CHANNEL_ID", "@your_channel_username") # Public: @username | Private: -100xxxx
+CHANNEL_ID = os.getenv("CHANNEL_ID", "@your_channel_username")
 CHANNEL_TITLE = "MOVIE HUB"
 POST_TITLE = "ALL YOUR ENTERTAINMENT IN ONE PLACE"
 PREMIUM_URL = "https://t.me/your_premium_link"
@@ -19,6 +19,9 @@ PREMIUM_URL = "https://t.me/your_premium_link"
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
+
+# Latest generated image ko RAM mein rakhne ke liye taaki Telegram Link Preview use message ke ANDAR dikha sake
+LATEST_CARD_BYTES = b""
 
 def get_font(size: int, bold: bool = True):
     font_paths = [
@@ -30,91 +33,87 @@ def get_font(size: int, bold: bool = True):
             return ImageFont.truetype(path, size)
     return ImageFont.load_default()
 
-def generate_card_image(include_fake_buttons: bool = True) -> bytes:
-    width = 600
-    height = 780 if include_fake_buttons else 420
-    bg_color = "#17212b"
+def generate_exact_inside_card() -> bytes:
+    """Bilkul Abigail/Movie Hub jaisa اندرونی (Inside-Message) Card banata hai (Bina square [] boxes ke)"""
+    width, height = 600, 760
+    bg_color = "#17212b"      # Exact Telegram Dark Message Background
     card_bg = "#131c26"
-    border_col = "#24303f"
+    border_col = "#263445"
 
     img = Image.new("RGB", (width, height), bg_color)
     draw = ImageDraw.Draw(img)
 
-    font_h1 = get_font(34, True)
-    font_sub = get_font(16, True)
-    font_title = get_font(18, True)
+    font_title = get_font(19, True)
     font_desc = get_font(14, False)
-    font_btn = get_font(17, True)
+    font_cta = get_font(23, True)
+    font_btn = get_font(18, True)
 
-    # 1. Top Banner Box
-    draw.rounded_rectangle([20, 20, 580, 200], radius=18, fill="#0d141c", outline="#2b394a", width=2)
-    draw.text((45, 55), f"🎬 {CHANNEL_TITLE}", fill="#ffffff", font=font_h1)
-    draw.text((45, 105), POST_TITLE, fill="#93c5fd", font=font_sub)
-    draw.rounded_rectangle([45, 145, 130, 151], radius=3, fill="#3b82f6")
+    # 1. 6-Box Grid Table (Bilkul 2nd Screenshot Jaisa)
+    grid_top, grid_bottom = 15, 315
+    grid_left, grid_right = 20, 580
+    draw.rounded_rectangle([grid_left, grid_top, grid_right, grid_bottom], radius=16, fill=card_bg, outline=border_col, width=2)
+    
+    # Vertical & Horizontal Grid Lines
+    mid_x = width // 2
+    draw.line([(mid_x, grid_top), (mid_x, grid_bottom)], fill=border_col, width=2)
+    draw.line([(grid_left, 115), (grid_right, 115)], fill=border_col, width=2)
+    draw.line([(grid_left, 215), (grid_right, 215)], fill=border_col, width=2)
 
-    # 2. Row 1: Two Cards
-    draw.rounded_rectangle([20, 215, 292, 300], radius=14, fill=card_bg, outline=border_col, width=2)
-    draw.rounded_rectangle([35, 232, 85, 282], radius=10, fill="#2563eb")
-    draw.text((48, 245), "🎬", fill="#ffffff", font=font_title)
-    draw.text((100, 235), "Browse Movies", fill="#ffffff", font=font_title)
-    draw.text((100, 260), "Find your next watch", fill="#7f91a4", font=font_desc)
-    draw.text((268, 245), ">", fill="#5c6c7c", font=font_title)
+    grid_items = [
+        ("BROWSE MOVIES", "Find your next watch", "#38bdf8"),
+        ("ONLY FOR YOU", "Exclusive collection", "#f472b6"),
+        ("FULL MOVIES", "4K & 1080p Bluray", "#4ade80"),
+        ("LIVE STREAMS", "Watch non-stop", "#fb923c"),
+        ("HD CONTENT", "All formats ready", "#a78bfa"),
+        ("FREE VIDEOS", "Instant access", "#f87171"),
+    ]
 
-    draw.rounded_rectangle([308, 215, 580, 300], radius=14, fill=card_bg, outline=border_col, width=2)
-    draw.rounded_rectangle([323, 232, 373, 282], radius=10, fill="#2563eb")
-    draw.text((335, 245), "HD", fill="#ffffff", font=font_title)
-    draw.text((388, 235), "Video Quality", fill="#ffffff", font=font_title)
-    draw.text((388, 260), "View available formats", fill="#7f91a4", font=font_desc)
-    draw.text((555, 245), ">", fill="#5c6c7c", font=font_title)
+    for idx, (title, sub, col) in enumerate(grid_items):
+        r = idx // 2
+        c = idx % 2
+        cx = grid_left + (c * 280) + 140
+        cy = grid_top + (r * 100) + 50
 
-    # 3. Row 2: Full Width Card
-    draw.rounded_rectangle([20, 315, 580, 400], radius=14, fill=card_bg, outline=border_col, width=2)
-    draw.rounded_rectangle([35, 332, 85, 382], radius=10, fill="#7c3aed")
-    draw.text((44, 347), "VIP", fill="#ffffff", font=font_sub)
-    draw.text((100, 335), "Premium Membership", fill="#ffffff", font=font_title)
-    draw.text((100, 360), "See plans and benefits", fill="#7f91a4", font=font_desc)
-    draw.text((555, 345), ">", fill="#5c6c7c", font=font_title)
+        tb = draw.textbbox((0, 0), title, font=font_title)
+        tw = tb[2] - tb[0]
+        draw.text((cx - tw // 2, cy - 20), title, fill=col, font=font_title)
 
-    # 4. Optional Fake Buttons Section
-    if include_fake_buttons:
-        draw.line([(0, 420), (600, 420)], fill="#232e3c", width=2)
-        draw.text((30, 438), "Get Full Access Now 👇", fill="#ffffff", font=get_font(22, True))
+        sb = draw.textbbox((0, 0), sub, font=font_desc)
+        sw = sb[2] - sb[0]
+        draw.text((cx - sw // 2, cy + 6), sub, fill="#8a9aa9", font=font_desc)
 
-        buttons = [
-            ("JOIN FREE", "#3b202c", "#7c3548", "#f472b6"),
-            ("START HERE", "#143325", "#16a34a", "#4ade80"),
-            ("UNLOCK VIP", "#1d9bf0", "#38bdf8", "#ffffff"),
-            ("EXPLORE", "#3b202c", "#7c3548", "#f472b6"),
-            ("JOIN CLUB", "#143325", "#16a34a", "#4ade80"),
-        ]
+    # 2. "Get Full Access Now" Section
+    draw.text((25, 345), "Get Full Access Now", fill="#ffffff", font=font_cta)
+    # Red Curved Arrow Draw
+    draw.arc([275, 340, 315, 380], start=270, end=45, fill="#f43f5e", width=4)
+    draw.polygon([(312, 368), (322, 365), (315, 377)], fill="#f43f5e")
 
-        y_start = 485
-        for label, bg_btn, border_btn, txt_col in buttons:
-            draw.rounded_rectangle([55, y_start, 545, y_start + 46], radius=23, fill=bg_btn, outline=border_btn, width=2)
-            text_str = f"✨  {label}  ✨"
-            bbox = draw.textbbox((0, 0), text_str, font=font_btn)
-            tw = bbox[2] - bbox[0]
-            draw.text(((width - tw) // 2, y_start + 12), text_str, fill=txt_col, font=font_btn)
-            draw.rectangle([510, y_start + 17, 522, y_start + 29], outline=txt_col, width=2)
-            y_start += 56
+    # 3. 6 Pill-Shaped Colorful Buttons (Inside Image)
+    buttons = [
+        ("JOIN FREE", "#3b202c", "#7c3548", "#f472b6"),
+        ("START HERE", "#143325", "#16a34a", "#4ade80"),
+        ("UNLOCK VIP", "#1d9bf0", "#38bdf8", "#ffffff"),
+        ("EXPLORE", "#3b202c", "#7c3548", "#f472b6"),
+        ("ENTER NOW", "#1d9bf0", "#38bdf8", "#ffffff"),
+        ("JOIN CLUB", "#143325", "#16a34a", "#4ade80"),
+    ]
+
+    y_start = 400
+    for label, bg_btn, border_btn, txt_col in buttons:
+        draw.rounded_rectangle([65, y_start, 535, y_start + 46], radius=23, fill=bg_btn, outline=border_btn, width=2)
+        
+        text_str = f"⚡  {label}  ⚡"
+        bbox = draw.textbbox((0, 0), text_str, font=font_btn)
+        tw = bbox[2] - bbox[0]
+        draw.text(((width - tw) // 2, y_start + 12), text_str, fill=txt_col, font=font_btn)
+        
+        # Small square icon on right (exact screenshot match)
+        draw.rounded_rectangle([500, y_start + 16, 514, y_start + 30], radius=3, outline=txt_col, width=2)
+        y_start += 56
 
     output = io.BytesIO()
     img.save(output, format="PNG")
     return output.getvalue()
-
-def get_5_buttons():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✨ 🎬 JOIN FREE 🪽 ✨", url=PREMIUM_URL)],
-        [InlineKeyboardButton(text="✨ 🎬 START HERE 🪽 ✨", url=PREMIUM_URL)],
-        [InlineKeyboardButton(text="✨ 🎬 UNLOCK VIP 🪽 ✨", url=PREMIUM_URL)],
-        [InlineKeyboardButton(text="✨ 🎬 EXPLORE 🪽 ✨", url=PREMIUM_URL)],
-        [InlineKeyboardButton(text="✨ 🎬 JOIN CLUB 🪽 ✨", url=PREMIUM_URL)],
-    ])
-
-def get_1_button():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👉 С L I С K   H E R E 👈", url=PREMIUM_URL)]
-    ])
 
 # ==========================================================
 # 👋 /start COMMAND
@@ -122,85 +121,102 @@ def get_1_button():
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     await message.reply(
-        "✅ <b>Post Generator Bot Ready Hai!</b>\n\n"
-        "<b>1️⃣ Yahi Chat Mein Post Banayein:</b>\n"
-        "👉 /here_clickable - 5 Asli Buttons wala post\n"
-        "👉 /here_fullcard - Full Graphic Card wala post\n\n"
-        "<b>2️⃣ Direct Channel Mein Bhejein:</b>\n"
-        "👉 /post_clickable - Channel mein 5 Buttons wala post\n"
-        "👉 /post_fullcard - Channel mein Full Card post\n\n"
-        "<i>💡 Tip: Agar Channel mein 'chat not found' aaye, toh bot ko channel mein Admin banayein aur sahi CHANNEL_ID dalein.</i>",
+        "✅ <b>Inside-Text Post Generator Ready!</b>\n\n"
+        "<b>Bina Bahari Grey Buttons ke (100% Text ke andar):</b>\n"
+        "👉 /here_textbtn - Sare Clickable Buttons Text ke andar\n"
+        "👉 /here_inside - Exact Screenshot Design (Bina bahari button ke)\n\n"
+        "<b>Direct Channel Mein Bhejne Ke Liye:</b>\n"
+        "👉 /post_textbtn - Channel mein Text-Buttons bhejein\n"
+        "👉 /post_inside - Channel mein Exact Screenshot post bhejein",
         parse_mode="HTML"
     )
 
 # ==========================================================
-# 💬 YAHI CHAT MEIN GENERATE KARNE WALE COMMANDS
+# 🔥 MODE 1: SARE BUTTONS PURE TEXT KE ANDAR (100% Clickable)
 # ==========================================================
-@dp.message(Command("here_clickable"))
-async def send_here_clickable(message: types.Message):
-    img_bytes = generate_card_image(include_fake_buttons=False)
-    photo = BufferedInputFile(img_bytes, filename="header.png")
-    await message.answer_photo(
-        photo=photo,
-        caption="🚀 <b>Get Full Access Now</b> ⤵️",
+def build_in_text_post() -> str:
+    """Sare buttons aur grid pure Telegram Text ke andar clickable links ke roop mein"""
+    return (
+        f"🎬 <b><a href='{PREMIUM_URL}'>{CHANNEL_TITLE} — {POST_TITLE}</a></b>\n\n"
+        f"<blockquote>"
+        f"🍿 <a href='{PREMIUM_URL}'><b>BROWSE MOVIES</b></a>   ┃   💎 <a href='{PREMIUM_URL}'><b>4K ULTRA HD</b></a>\n"
+        f"────────────────────────\n"
+        f"🔥 <a href='{PREMIUM_URL}'><b>TRENDING NOW</b></a>    ┃   📺 <a href='{PREMIUM_URL}'><b>WEB SERIES</b></a>\n"
+        f"────────────────────────\n"
+        f"👑 <a href='{PREMIUM_URL}'><b>PREMIUM VIP</b></a>     ┃   🔓 <a href='{PREMIUM_URL}'><b>FREE VIDEOS</b></a>"
+        f"</blockquote>\n\n"
+        f"🚀 <b>Get Full Access Now</b> ⤵️\n\n"
+        f"<blockquote>      ✨ 🎬 <a href='{PREMIUM_URL}'><b>J O I N   F R E E</b></a> 🪽 ✨      ▢</blockquote>\n"
+        f"<blockquote>     ✨ 🎬 <a href='{PREMIUM_URL}'><b>S T A R T   H E R E</b></a> 🪽 ✨     ▢</blockquote>\n"
+        f"<blockquote>     ✨ 🎬 <a href='{PREMIUM_URL}'><b>U N L O C K   V I P</b></a> 🪽 ✨     ▢</blockquote>\n"
+        f"<blockquote>       ✨ 🎬 <a href='{PREMIUM_URL}'><b>E X P L O R E</b></a> 🪽 ✨       ▢</blockquote>\n"
+        f"<blockquote>     ✨ 🎬 <a href='{PREMIUM_URL}'><b>E N T E R   N O W</b></a> 🪽 ✨     ▢</blockquote>\n"
+        f"<blockquote>     ✨ 🎬 <a href='{PREMIUM_URL}'><b>J O I N   C L U B</b></a> 🪽 ✨     ▢</blockquote>"
+    )
+
+@dp.message(Command("here_textbtn"))
+async def send_here_textbtn(message: types.Message):
+    await message.answer(
+        text=build_in_text_post(),
         parse_mode="HTML",
-        reply_markup=get_5_buttons()
+        disable_web_page_preview=True
     )
 
-@dp.message(Command("here_fullcard"))
-async def send_here_fullcard(message: types.Message):
-    img_bytes = generate_card_image(include_fake_buttons=True)
-    photo = BufferedInputFile(img_bytes, filename="fullcard.png")
+@dp.message(Command("post_textbtn"))
+async def send_channel_textbtn(message: types.Message):
+    try:
+        await bot.send_message(
+            chat_id=CHANNEL_ID,
+            text=build_in_text_post(),
+            parse_mode="HTML",
+            disable_web_page_preview=True
+        )
+        await message.reply("✅ Text-Button Post Channel mein bhej diya gaya!")
+    except Exception as e:
+        await message.reply(f"❌ Channel Error: {e}")
+
+# ==========================================================
+# 🎨 MODE 2: EXACT SCREENSHOT (Image + Text Inside 1 Box, NO Grey Buttons)
+# ==========================================================
+def build_caption_with_in_text_links() -> str:
+    return (
+        f"🔥 <b><a href='{PREMIUM_URL}'>{CHANNEL_TITLE}</a> — {POST_TITLE}</b>\n\n"
+        f"⚡ <a href='{PREMIUM_URL}'><b>JOIN FREE</b></a>  |  "
+        f"🚀 <a href='{PREMIUM_URL}'><b>START HERE</b></a>  |  "
+        f"👑 <a href='{PREMIUM_URL}'><b>UNLOCK VIP</b></a>"
+    )
+
+@dp.message(Command("here_inside"))
+async def send_here_inside(message: types.Message):
+    img_bytes = generate_exact_inside_card()
+    photo = BufferedInputFile(img_bytes, filename="inside_card.png")
+    # show_caption_above_media=True se Text UPAR aayega aur Card NEECHE (Exact Abigail screenshot jaisa!)
+    # Aur koi bahari grey button nahi hoga!
     await message.answer_photo(
         photo=photo,
-        reply_markup=get_1_button()
+        caption=build_caption_with_in_text_links(),
+        parse_mode="HTML",
+        show_caption_above_media=True
     )
 
-# ==========================================================
-# 📢 CHANNEL MEIN BHEJNE WALE COMMANDS
-# ==========================================================
-@dp.message(Command("post_clickable"))
-async def send_clickable_post(message: types.Message):
-    status = await message.reply("⏳ Sending to Channel...")
+@dp.message(Command("post_inside"))
+async def send_channel_inside(message: types.Message):
     try:
-        img_bytes = generate_card_image(include_fake_buttons=False)
-        photo = BufferedInputFile(img_bytes, filename="header.png")
+        img_bytes = generate_exact_inside_card()
+        photo = BufferedInputFile(img_bytes, filename="inside_card.png")
         await bot.send_photo(
             chat_id=CHANNEL_ID,
             photo=photo,
-            caption="🚀 <b>Get Full Access Now</b> ⤵️",
+            caption=build_caption_with_in_text_links(),
             parse_mode="HTML",
-            reply_markup=get_5_buttons()
+            show_caption_above_media=True
         )
-        await status.edit_text("✅ Successfully Sent to Channel!")
+        await message.reply("✅ Exact Inside-Box Post Channel mein bhej diya gaya!")
     except Exception as e:
-        await status.edit_text(
-            f"❌ <b>Channel Error:</b> {e}\n\n"
-            f"👉 <i>Abhi dekhne ke liye</i> /here_clickable <i>dabayein!</i>",
-            parse_mode="HTML"
-        )
-
-@dp.message(Command("post_fullcard"))
-async def send_fullcard_post(message: types.Message):
-    status = await message.reply("⏳ Sending Full Card to Channel...")
-    try:
-        img_bytes = generate_card_image(include_fake_buttons=True)
-        photo = BufferedInputFile(img_bytes, filename="fullcard.png")
-        await bot.send_photo(
-            chat_id=CHANNEL_ID,
-            photo=photo,
-            reply_markup=get_1_button()
-        )
-        await status.edit_text("✅ Full Card Sent to Channel!")
-    except Exception as e:
-        await status.edit_text(
-            f"❌ <b>Channel Error:</b> {e}\n\n"
-            f"👉 <i>Abhi dekhne ke liye</i> /here_fullcard <i>dabayein!</i>",
-            parse_mode="HTML"
-        )
+        await message.reply(f"❌ Channel Error: {e}")
 
 # ==========================================================
-# 🌐 RENDER KEEP-ALIVE WEB SERVER
+# 🌐 RENDER WEB SERVER
 # ==========================================================
 async def handle_ping(request):
     return web.Response(text="Bot is Live!")
@@ -221,3 +237,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
