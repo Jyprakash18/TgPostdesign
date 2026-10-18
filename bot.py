@@ -1,172 +1,157 @@
 import os
-import io
 import asyncio
-import urllib.request
 from aiohttp import web
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile
-from PIL import Image, ImageDraw, ImageFont
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, MessageEntity
 
 # ==========================================
-# ⚙️ CONFIGURATION
+# ⚙️ CONFIGURATION (Apni Details Yahan Dalein)
 # ==========================================
 BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
 CHANNEL_ID = os.getenv("CHANNEL_ID", "@your_channel_username")
-POST_HEADER = "BEST ❌❌❌ IN"
-ADULT_TEXT = "This content is for adults only"
+POST_HEADER = "· BEST ❌❌❌ IN ✈️"
+ADULT_TEXT = "🔞 This content is for adults only ⤵️"
 PREMIUM_URL = "https://t.me/your_premium_link"
-
-GRID_ITEMS = [
-    ("HARDCORE", "1f440"),   # 👀
-    ("TEENAGER", "1f51e"),   # 🔞
-    ("SPY CAM", "1f4f8"),    # 📸
-    ("CHEATING", "1f494"),   # 💔/❤️‍🩹
-    ("MASSAGE", "1f975"),    # 🥵
-    ("CASTING", "1f3ac"),    # 🎬
-]
 # ==========================================
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
-EMOJI_CACHE = {}
 
-def get_emoji_png(code: str, size: int = 26) -> Image.Image:
-    key = (code, size)
-    if key in EMOJI_CACHE:
-        return EMOJI_CACHE[key]
-    url = f"https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/{code}.png"
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=4) as resp:
-            im = Image.open(io.BytesIO(resp.read())).convert("RGBA")
-            im = im.resize((size, size), Image.Resampling.LANCZOS)
-            EMOJI_CACHE[key] = im
-            return im
-    except Exception:
-        return None
+# Agar aap woh original Custom Emoji Box wala message bot ko forward karenge, toh woh yahan save ho jayega:
+SAVED_CUSTOM_TEXT = None
+SAVED_CUSTOM_ENTITIES = None
 
-def get_font(size: int, bold: bool = True, serif: bool = False):
-    paths = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf" if serif else "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "arialbd.ttf"
-    ]
-    for p in paths:
-        if os.path.exists(p):
-            return ImageFont.truetype(p, size)
-    return ImageFont.load_default()
-
-def create_exact_box_design() -> bytes:
+def get_pure_text_box_message() -> str:
     """
-    Exact Red-Circle 6-Box Grid Table banavto (Seamless Telegram Dark Background sahit)
+    100% Pure Text Message (NO IMAGE!).
+    Ismein har line exact barabar width (Monospace + Clickable Links) mein hai taaki box kabhi na toote!
     """
-    width, height = 600, 380
-    bg_color = "#18222d"      # Exact Telegram Dark Message Bubble Color
-    border_col = "#2b3847"    # Subtle Thin Rounded Grid Border
-
-    img = Image.new("RGBA", (width, height), bg_color)
-    draw = ImageDraw.Draw(img)
-
-    font_header = get_font(23, bold=True, serif=True)
-    font_cell = get_font(20, bold=True, serif=False)
-
-    # 1. Top Header: "· BEST ❌❌❌ IN ✈️"
-    draw.text((28, 22), "·", fill="#ff4d6d", font=font_header)
-    draw.text((48, 22), "BEST", fill="#ffffff", font=font_header)
-    
-    emo_x = get_emoji_png("274c", 22)
-    x_pos = 122
-    for _ in range(3):
-        if emo_x:
-            img.paste(emo_x, (x_pos, 24), emo_x)
-        x_pos += 26
-    
-    draw.text((x_pos + 4, 22), "IN", fill="#ffffff", font=font_header)
-
-    # 2. 6-Box Rounded Table (2 Columns x 3 Rows)
-    tx1, ty1, tx2, ty2 = 20, 72, 580, 355
-    draw.rounded_rectangle([tx1, ty1, tx2, ty2], radius=16, fill=bg_color, outline=border_col, width=2)
-
-    # Vertical Center Line
-    mid_x = width // 2
-    draw.line([(mid_x, ty1), (mid_x, ty2)], fill=border_col, width=2)
-
-    # 2 Horizontal Row Lines
-    row_h = (ty2 - ty1) // 3
-    draw.line([(tx1, ty1 + row_h), (tx2, ty1 + row_h)], fill=border_col, width=2)
-    draw.line([(tx1, ty1 + 2 * row_h), (tx2, ty1 + 2 * row_h)], fill=border_col, width=2)
-
-    # Fill 6 Cells with Text + Emoji
-    col_w = (tx2 - tx1) // 2
-    for idx, (label, emo_code) in enumerate(GRID_ITEMS):
-        r = idx // 2
-        c = idx % 2
-        cx = tx1 + c * col_w + col_w // 2
-        cy = ty1 + r * row_h + row_h // 2
-
-        emo = get_emoji_png(emo_code, 24)
-        bbox = draw.textbbox((0, 0), label, font=font_cell)
-        tw = bbox[2] - bbox[0]
-        th = bbox[3] - bbox[1]
-
-        total_w = tw + (32 if emo else 0)
-        start_x = cx - total_w // 2
-
-        draw.text((start_x, cy - th // 2 - 2), label, fill="#ffffff", font=font_cell)
-        if emo:
-            img.paste(emo, (start_x + tw + 8, cy - 12), emo)
-
-    out = io.BytesIO()
-    img.convert("RGB").save(out, format="PNG")
-    return out.getvalue()
-
-@dp.message(Command("start"))
-async def cmd_start(message: types.Message):
-    await message.reply(
-        "✅ <b>6-Box Design Generator Ready!</b>\n\n"
-        "👉 /generate - Yahi chat madhye 6-Box Design + Clickable Button tayar kara\n"
-        "👉 /post_channel - Direct Channel madhye pathva",
-        parse_mode="HTML"
+    return (
+        f"<b><a href='{PREMIUM_URL}'>{POST_HEADER}</a></b>\n\n"
+        f"<code>╭──────────────┬──────────────╮</code>\n"
+        f"<code>│ </code><a href='{PREMIUM_URL}'><b>HARDCORE 👀</b></a><code>  │ </code><a href='{PREMIUM_URL}'><b>TEENAGER 🔞</b></a><code>  │</code>\n"
+        f"<code>├──────────────┼──────────────┤</code>\n"
+        f"<code>│ </code><a href='{PREMIUM_URL}'><b>SPY CAM 📸</b></a><code>   │ </code><a href='{PREMIUM_URL}'><b>CHEATING ❤️‍🩹</b></a><code>  │</code>\n"
+        f"<code>├──────────────┼──────────────┤</code>\n"
+        f"<code>│ </code><a href='{PREMIUM_URL}'><b>MASSAGE 🥵</b></a><code>   │ </code><a href='{PREMIUM_URL}'><b>CASTING 🎬</b></a><code>   │</code>\n"
+        f"<code>╰──────────────┴──────────────╯</code>\n\n"
+        f"<b><a href='{PREMIUM_URL}'>{ADULT_TEXT}</a></b>\n\n"
+        f"<blockquote>      👉 <a href='{PREMIUM_URL}'><b>C L I C K   H E R E</b></a> 👅 ↗      </blockquote>"
     )
 
-@dp.message(Command("generate"))
-async def cmd_generate(message: types.Message):
-    img_bytes = create_exact_box_design()
-    photo = BufferedInputFile(img_bytes, filename="box_grid.png")
-
-    # Clickable Button khali
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+def get_bottom_button() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="👉 С L I С K   H E R E 👅", url=PREMIUM_URL)]
     ])
 
-    await message.answer_photo(
-        photo=photo,
-        caption=f"🔞 <b><a href='{PREMIUM_URL}'>{ADULT_TEXT}</a></b> ⤵️",
-        parse_mode="HTML",
-        reply_markup=keyboard
+# ==========================================================
+# 👋 /start COMMAND (Pure Hindi/Hinglish Text Message)
+# ==========================================================
+@dp.message(Command("start"))
+async def cmd_start(message: types.Message):
+    await message.reply(
+        "✅ <b>100% Pure Text Post Bot Ready! (No Image!)</b>\n\n"
+        "👉 /generate - Yahi chat mein <b>Pure Text Message</b> (6-Box + Link) banayein\n"
+        "👉 /post_channel - Direct apne Channel mein Text Post bhejein\n\n"
+        "💡 <b>Pro Trick (Exact Custom Emoji Box ke liye):</b>\n"
+        "Us channel (<i>Premierm Support</i> ya <i>Abigail</i>) ka post Copy ya Forward karke is bot mein bhejein—bot uske Custom Emoji Box ko 100% Text mein aapke link ke saath set kar dega!",
+        parse_mode="HTML"
     )
 
+# ==========================================================
+# 💬 /generate - 100% TEXT MESSAGE (NO PHOTO!)
+# ==========================================================
+@dp.message(Command("generate"))
+async def cmd_generate(message: types.Message):
+    global SAVED_CUSTOM_TEXT, SAVED_CUSTOM_ENTITIES
+
+    # Agar aapne original post forward kiya hua hai, toh 100% wahi Custom Emoji Text Box bhejega:
+    if SAVED_CUSTOM_TEXT:
+        await message.answer(
+            text=SAVED_CUSTOM_TEXT,
+            entities=SAVED_CUSTOM_ENTITIES,
+            disable_web_page_preview=True,
+            reply_markup=get_bottom_button()
+        )
+    else:
+        # Warna built-in Pure Text 6-Box Message bhejega (Bina kisi Image ke!):
+        await message.answer(
+            text=get_pure_text_box_message(),
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+            reply_markup=get_bottom_button()
+        )
+
+# ==========================================================
+# 📢 /post_channel - DIRECT CHANNEL MEIN TEXT POST BHEJEIN
+# ==========================================================
 @dp.message(Command("post_channel"))
 async def cmd_post_channel(message: types.Message):
+    global SAVED_CUSTOM_TEXT, SAVED_CUSTOM_ENTITIES
     try:
-        img_bytes = create_exact_box_design()
-        photo = BufferedInputFile(img_bytes, filename="box_grid.png")
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="👉 С L I С K   H E R E 👅", url=PREMIUM_URL)]
-        ])
-        await bot.send_photo(
-            chat_id=CHANNEL_ID,
-            photo=photo,
-            caption=f"🔞 <b><a href='{PREMIUM_URL}'>{ADULT_TEXT}</a></b> ⤵️",
-            parse_mode="HTML",
-            reply_markup=keyboard
-        )
-        await message.reply("✅ Channel madhye post pathvli ahe!")
+        if SAVED_CUSTOM_TEXT:
+            await bot.send_message(
+                chat_id=CHANNEL_ID,
+                text=SAVED_CUSTOM_TEXT,
+                entities=SAVED_CUSTOM_ENTITIES,
+                disable_web_page_preview=True,
+                reply_markup=get_bottom_button()
+            )
+        else:
+            await bot.send_message(
+                chat_id=CHANNEL_ID,
+                text=get_pure_text_box_message(),
+                parse_mode="HTML",
+                disable_web_page_preview=True,
+                reply_markup=get_bottom_button()
+            )
+        await message.reply("✅ Pure Text Post Channel mein bhej diya gaya!")
     except Exception as e:
-        await message.reply(f"❌ Error: {e}")
+        await message.reply(f"❌ Channel Error: {e}")
 
+# ==========================================================
+# 🧲 CUSTOM EMOJI BOX CLONER (Forward/Paste Handler)
+# ==========================================================
+@dp.message(F.text | F.caption)
+async def clone_exact_text_box(message: types.Message):
+    global SAVED_CUSTOM_TEXT, SAVED_CUSTOM_ENTITIES
+
+    raw_text = message.text or message.caption
+    if raw_text.startswith("/"):
+        return
+
+    raw_entities = message.entities or message.caption_entities or []
+    new_entities = []
+
+    for ent in raw_entities:
+        data = ent.model_dump()
+        if ent.type in ("text_link", "url"):
+            data["type"] = "text_link"
+            data["url"] = PREMIUM_URL
+        new_entities.append(MessageEntity(**data))
+
+    SAVED_CUSTOM_TEXT = raw_text
+    SAVED_CUSTOM_ENTITIES = new_entities
+
+    # Turant 100% Text Message wapas bhejein
+    await message.answer(
+        text=SAVED_CUSTOM_TEXT,
+        entities=SAVED_CUSTOM_ENTITIES,
+        disable_web_page_preview=True,
+        reply_markup=get_bottom_button()
+    )
+    await message.reply(
+        "✅ <b>Exact Text Box Saved!</b>\n"
+        "Ab jab bhi aap /generate ya /post_channel dabayenge, yahi exact Text Post aapke link ke saath jayega!",
+        parse_mode="HTML"
+    )
+
+# ==========================================================
+# 🌐 RENDER KEEP-ALIVE WEB SERVER
+# ==========================================================
 async def handle_ping(request):
-    return web.Response(text="Bot is Running!")
+    return web.Response(text="Bot is Live!")
 
 async def start_web_server():
     app = web.Application()
