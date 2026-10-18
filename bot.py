@@ -1,10 +1,11 @@
 import os
 import io
 import asyncio
+import urllib.request
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
-from aiogram.types import BufferedInputFile, LinkPreviewOptions
+from aiogram.types import BufferedInputFile
 from PIL import Image, ImageDraw, ImageFont
 
 # ==========================================
@@ -13,15 +14,35 @@ from PIL import Image, ImageDraw, ImageFont
 BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
 CHANNEL_ID = os.getenv("CHANNEL_ID", "@your_channel_username")
 CHANNEL_TITLE = "MOVIE HUB"
-POST_TITLE = "ALL YOUR ENTERTAINMENT IN ONE PLACE"
+POST_TITLE = "LEAKED PREMIUM VAULT"
 PREMIUM_URL = "https://t.me/your_premium_link"
 # ==========================================
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Latest generated image ko RAM mein rakhne ke liye taaki Telegram Link Preview use message ke ANDAR dikha sake
-LATEST_CARD_BYTES = b""
+# Emoji & Thumbnail Cache taaki har baar fast generate ho
+ASSET_CACHE = {}
+
+def fetch_image_from_url(url: str, size: tuple) -> Image.Image:
+    """HD Emojis aur small thumbnails download karke resize karta hai"""
+    cache_key = (url, size)
+    if cache_key in ASSET_CACHE:
+        return ASSET_CACHE[cache_key]
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            img = Image.open(io.BytesIO(resp.read())).convert("RGBA")
+            img = img.resize(size, Image.Resampling.LANCZOS)
+            ASSET_CACHE[cache_key] = img
+            return img
+    except Exception:
+        return None
+
+def get_emoji_img(codepoint: str, size: int = 24) -> Image.Image:
+    """Twemoji CDN se exact color emoji PNG lata hai"""
+    url = f"https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/{codepoint}.png"
+    return fetch_image_from_url(url, (size, size))
 
 def get_font(size: int, bold: bool = True):
     font_paths = [
@@ -33,190 +54,199 @@ def get_font(size: int, bold: bool = True):
             return ImageFont.truetype(path, size)
     return ImageFont.load_default()
 
-def generate_exact_inside_card() -> bytes:
-    """Bilkul Abigail/Movie Hub jaisa اندرونی (Inside-Message) Card banata hai (Bina square [] boxes ke)"""
-    width, height = 600, 760
-    bg_color = "#17212b"      # Exact Telegram Dark Message Background
-    card_bg = "#131c26"
-    border_col = "#263445"
+def generate_abigail_style_card() -> bytes:
+    """100% Exact Abigail Red-Circle Screenshot Generator (6 Grid + 6 Colorful Pill Buttons)"""
+    width, height = 560, 790
+    bg_color = "#17212b"      # Exact Telegram Dark Bubble Color
+    border_col = "#2b3948"    # Exact Subtle Table Border
+    text_blue = "#7cc5f8"     # Light Blue Grid Text Color (Exact match)
 
-    img = Image.new("RGB", (width, height), bg_color)
+    img = Image.new("RGBA", (width, height), bg_color)
     draw = ImageDraw.Draw(img)
 
-    font_title = get_font(19, True)
-    font_desc = get_font(14, False)
-    font_cta = get_font(23, True)
-    font_btn = get_font(18, True)
+    font_grid = get_font(18, False)
+    font_cta = get_font(22, False)
+    font_btn = get_font(17, True)
 
-    # 1. 6-Box Grid Table (Bilkul 2nd Screenshot Jaisa)
-    grid_top, grid_bottom = 15, 315
-    grid_left, grid_right = 20, 580
-    draw.rounded_rectangle([grid_left, grid_top, grid_right, grid_bottom], radius=16, fill=card_bg, outline=border_col, width=2)
-    
-    # Vertical & Horizontal Grid Lines
+    # ----------------------------------------------------
+    # 1. TOP 6-BOX GRID TABLE (Exact Red Circle 1)
+    # ----------------------------------------------------
+    gx1, gy1, gx2, gy2 = 16, 12, 544, 336
+    draw.rounded_rectangle([gx1, gy1, gx2, gy2], radius=16, fill="#17212b", outline=border_col, width=2)
+
     mid_x = width // 2
-    draw.line([(mid_x, grid_top), (mid_x, grid_bottom)], fill=border_col, width=2)
-    draw.line([(grid_left, 115), (grid_right, 115)], fill=border_col, width=2)
-    draw.line([(grid_left, 215), (grid_right, 215)], fill=border_col, width=2)
+    row_h = (gy2 - gy1) // 3
+    draw.line([(mid_x, gy1), (mid_x, gy2)], fill=border_col, width=2)
+    draw.line([(gx1, gy1 + row_h), (gx2, gy1 + row_h)], fill=border_col, width=2)
+    draw.line([(gx1, gy1 + 2 * row_h), (gx2, gy1 + 2 * row_h)], fill=border_col, width=2)
 
-    grid_items = [
-        ("BROWSE MOVIES", "Find your next watch", "#38bdf8"),
-        ("ONLY FOR YOU", "Exclusive collection", "#f472b6"),
-        ("FULL MOVIES", "4K & 1080p Bluray", "#4ade80"),
-        ("LIVE STREAMS", "Watch non-stop", "#fb923c"),
-        ("HD CONTENT", "All formats ready", "#a78bfa"),
-        ("FREE VIDEOS", "Instant access", "#f87171"),
+    # Grid Data: (Emoji Code, Line 1, Line 2, Thumbnail URL)
+    thumb_urls = [
+        "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=100",
+        "https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=100",
+        "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=100",
+        "https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=100",
+        "https://images.unsplash.com/photo-1616530940355-351fabd9524b?w=100",
+        "https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?w=100",
     ]
 
-    for idx, (title, sub, col) in enumerate(grid_items):
+    grid_cells = [
+        ("1f48b", "KISS", "COMPILATION", thumb_urls[0]),
+        ("1f49d", "ONLY FOR", "YOU", thumb_urls[1]),
+        ("1f3ac", "FULL", "MOVIES", thumb_urls[2]),
+        ("1f525", "LIVE CAMS", "", thumb_urls[3]),
+        ("1f48e", "HD", "CONTENT", thumb_urls[4]),
+        ("1f51e", "FREE", "VIDEOS", thumb_urls[5]),
+    ]
+
+    col_w = (gx2 - gx1) // 2
+    for idx, (emo_code, line1, line2, t_url) in enumerate(grid_cells):
         r = idx // 2
         c = idx % 2
-        cx = grid_left + (c * 280) + 140
-        cy = grid_top + (r * 100) + 50
+        cx = gx1 + c * col_w + col_w // 2
+        cy = gy1 + r * row_h + row_h // 2
 
-        tb = draw.textbbox((0, 0), title, font=font_title)
-        tw = tb[2] - tb[0]
-        draw.text((cx - tw // 2, cy - 20), title, fill=col, font=font_title)
+        # Line 1 + Emoji
+        emo_img = get_emoji_img(emo_code, 22)
+        tb1 = draw.textbbox((0, 0), line1, font=font_grid)
+        w1 = tb1[2] - tb1[0]
+        total_w1 = (26 if emo_img else 0) + w1
+        start_x1 = cx - total_w1 // 2
 
-        sb = draw.textbbox((0, 0), sub, font=font_desc)
-        sw = sb[2] - sb[0]
-        draw.text((cx - sw // 2, cy + 6), sub, fill="#8a9aa9", font=font_desc)
+        if emo_img:
+            img.paste(emo_img, (start_x1, cy - 36), emo_img)
+            draw.text((start_x1 + 28, cy - 35), line1, fill=text_blue, font=font_grid)
+        else:
+            draw.text((start_x1, cy - 35), line1, fill=text_blue, font=font_grid)
 
-    # 2. "Get Full Access Now" Section
-    draw.text((25, 345), "Get Full Access Now", fill="#ffffff", font=font_cta)
-    # Red Curved Arrow Draw
-    draw.arc([275, 340, 315, 380], start=270, end=45, fill="#f43f5e", width=4)
-    draw.polygon([(312, 368), (322, 365), (315, 377)], fill="#f43f5e")
+        # Line 2 + Small Square Photo
+        thumb_img = fetch_image_from_url(t_url, (28, 28))
+        if line2:
+            tb2 = draw.textbbox((0, 0), line2, font=font_grid)
+            w2 = tb2[2] - tb2[0]
+            total_w2 = w2 + (34 if thumb_img else 0)
+            start_x2 = cx - total_w2 // 2
+            draw.text((start_x2, cy - 6), line2, fill=text_blue, font=font_grid)
+            if thumb_img:
+                img.paste(thumb_img, (start_x2 + w2 + 6, cy - 8))
+        else:
+            if thumb_img:
+                img.paste(thumb_img, (cx - 14, cy - 4))
 
-    # 3. 6 Pill-Shaped Colorful Buttons (Inside Image)
+    # ----------------------------------------------------
+    # 2. "Get Full Access Now" + Red Curved Arrow
+    # ----------------------------------------------------
+    draw.text((18, 378), "Get Full Access Now", fill="#ffffff", font=font_cta)
+    # Red Curved Arrow
+    draw.arc([255, 370, 298, 415], start=260, end=35, fill="#ff1e56", width=4)
+    draw.polygon([(292, 405), (305, 400), (298, 415)], fill="#ff1e56")
+
+    # ----------------------------------------------------
+    # 3. 6 COLORFUL PILL BUTTONS (Exact Red Circle 2)
+    # ----------------------------------------------------
+    wing_emo = get_emoji_img("1fabd", 22)  # 🪽 White Wing Emoji
+    zap_emo = get_emoji_img("26a1", 20)    # ⚡ Zap/Spark Emoji
+
+    # (Label, Width, Fill Color, Border Color, Text Color)
     buttons = [
-        ("JOIN FREE", "#3b202c", "#7c3548", "#f472b6"),
-        ("START HERE", "#143325", "#16a34a", "#4ade80"),
-        ("UNLOCK VIP", "#1d9bf0", "#38bdf8", "#ffffff"),
-        ("EXPLORE", "#3b202c", "#7c3548", "#f472b6"),
-        ("ENTER NOW", "#1d9bf0", "#38bdf8", "#ffffff"),
-        ("JOIN CLUB", "#143325", "#16a34a", "#4ade80"),
+        ("JOIN FREE", 390, "#372936", "#4d3548", "#ff758f"),
+        ("START HERE", 420, "#243b35", "#2e5246", "#5ef38c"),
+        ("UNLOCK VIP", 420, "#249ef0", "#38bdf8", "#ffffff"),
+        ("EXPLORE", 380, "#372936", "#4d3548", "#ff758f"),
+        ("ENTER NOW", 420, "#249ef0", "#38bdf8", "#ffffff"),
+        ("JOIN CLUB", 400, "#243b35", "#2e5246", "#5ef38c"),
     ]
 
-    y_start = 400
-    for label, bg_btn, border_btn, txt_col in buttons:
-        draw.rounded_rectangle([65, y_start, 535, y_start + 46], radius=23, fill=bg_btn, outline=border_btn, width=2)
-        
-        text_str = f"⚡  {label}  ⚡"
-        bbox = draw.textbbox((0, 0), text_str, font=font_btn)
-        tw = bbox[2] - bbox[0]
-        draw.text(((width - tw) // 2, y_start + 12), text_str, fill=txt_col, font=font_btn)
-        
-        # Small square icon on right (exact screenshot match)
-        draw.rounded_rectangle([500, y_start + 16, 514, y_start + 30], radius=3, outline=txt_col, width=2)
-        y_start += 56
+    y_btn = 435
+    for label, bw, b_fill, b_border, t_col in buttons:
+        bx1 = (width - bw) // 2
+        bx2 = bx1 + bw
+        draw.rounded_rectangle([bx1, y_btn, bx2, y_btn + 46], radius=23, fill=b_fill, outline=b_border, width=1)
 
+        # Center Button Text
+        tb = draw.textbbox((0, 0), label, font=font_btn)
+        tw = tb[2] - tb[0]
+        tx = (width - tw) // 2
+        ty = y_btn + 13
+        draw.text((tx, ty), label, fill=t_col, font=font_btn)
+
+        # Left Emojis (⚡ 🪽)
+        if wing_emo:
+            img.paste(wing_emo, (tx - 30, y_btn + 12), wing_emo)
+        if zap_emo:
+            img.paste(zap_emo, (tx - 54, y_btn + 13), zap_emo)
+
+        # Right Emojis (🪽 ⚡)
+        if wing_emo:
+            img.paste(wing_emo, (tx + tw + 8, y_btn + 12), wing_emo)
+        if zap_emo:
+            img.paste(zap_emo, (tx + tw + 32, y_btn + 13), zap_emo)
+
+        # Right Small Square Icon (▢)
+        draw.rounded_rectangle([bx2 - 26, y_btn + 15, bx2 - 14, y_btn + 27], radius=2, outline=t_col, width=2)
+
+        y_btn += 56
+
+    final_rgb = img.convert("RGB")
     output = io.BytesIO()
-    img.save(output, format="PNG")
+    final_rgb.save(output, format="PNG")
     return output.getvalue()
 
+def build_top_text_link() -> str:
+    """Photo ke upar dikhne wala Clickable Text Link (Exact Abigail Top Header)"""
+    return (
+        f"🔥 <b><a href='{PREMIUM_URL}'>{CHANNEL_TITLE} — {POST_TITLE}</a></b>\n"
+        f"✨ <b><a href='{PREMIUM_URL}'>CLICK HERE TO UNLOCK FULL ACCESS</a></b> ✨"
+    )
+
 # ==========================================================
-# 👋 /start COMMAND
+# 👋 COMMANDS
 # ==========================================================
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     await message.reply(
-        "✅ <b>Inside-Text Post Generator Ready!</b>\n\n"
-        "<b>Bina Bahari Grey Buttons ke (100% Text ke andar):</b>\n"
-        "👉 /here_textbtn - Sare Clickable Buttons Text ke andar\n"
-        "👉 /here_inside - Exact Screenshot Design (Bina bahari button ke)\n\n"
-        "<b>Direct Channel Mein Bhejne Ke Liye:</b>\n"
-        "👉 /post_textbtn - Channel mein Text-Buttons bhejein\n"
-        "👉 /post_inside - Channel mein Exact Screenshot post bhejein",
+        "✅ <b>Exact Abigail-Style Post Bot Ready!</b>\n\n"
+        "👉 /here_inside - Yahi chat mein Exact Red-Circle Box + Photo Textlink banayein\n"
+        "👉 /post_inside - Direct Channel mein bhejein",
         parse_mode="HTML"
-    )
-
-# ==========================================================
-# 🔥 MODE 1: SARE BUTTONS PURE TEXT KE ANDAR (100% Clickable)
-# ==========================================================
-def build_in_text_post() -> str:
-    """Sare buttons aur grid pure Telegram Text ke andar clickable links ke roop mein"""
-    return (
-        f"🎬 <b><a href='{PREMIUM_URL}'>{CHANNEL_TITLE} — {POST_TITLE}</a></b>\n\n"
-        f"<blockquote>"
-        f"🍿 <a href='{PREMIUM_URL}'><b>BROWSE MOVIES</b></a>   ┃   💎 <a href='{PREMIUM_URL}'><b>4K ULTRA HD</b></a>\n"
-        f"────────────────────────\n"
-        f"🔥 <a href='{PREMIUM_URL}'><b>TRENDING NOW</b></a>    ┃   📺 <a href='{PREMIUM_URL}'><b>WEB SERIES</b></a>\n"
-        f"────────────────────────\n"
-        f"👑 <a href='{PREMIUM_URL}'><b>PREMIUM VIP</b></a>     ┃   🔓 <a href='{PREMIUM_URL}'><b>FREE VIDEOS</b></a>"
-        f"</blockquote>\n\n"
-        f"🚀 <b>Get Full Access Now</b> ⤵️\n\n"
-        f"<blockquote>      ✨ 🎬 <a href='{PREMIUM_URL}'><b>J O I N   F R E E</b></a> 🪽 ✨      ▢</blockquote>\n"
-        f"<blockquote>     ✨ 🎬 <a href='{PREMIUM_URL}'><b>S T A R T   H E R E</b></a> 🪽 ✨     ▢</blockquote>\n"
-        f"<blockquote>     ✨ 🎬 <a href='{PREMIUM_URL}'><b>U N L O C K   V I P</b></a> 🪽 ✨     ▢</blockquote>\n"
-        f"<blockquote>       ✨ 🎬 <a href='{PREMIUM_URL}'><b>E X P L O R E</b></a> 🪽 ✨       ▢</blockquote>\n"
-        f"<blockquote>     ✨ 🎬 <a href='{PREMIUM_URL}'><b>E N T E R   N O W</b></a> 🪽 ✨     ▢</blockquote>\n"
-        f"<blockquote>     ✨ 🎬 <a href='{PREMIUM_URL}'><b>J O I N   C L U B</b></a> 🪽 ✨     ▢</blockquote>"
-    )
-
-@dp.message(Command("here_textbtn"))
-async def send_here_textbtn(message: types.Message):
-    await message.answer(
-        text=build_in_text_post(),
-        parse_mode="HTML",
-        disable_web_page_preview=True
-    )
-
-@dp.message(Command("post_textbtn"))
-async def send_channel_textbtn(message: types.Message):
-    try:
-        await bot.send_message(
-            chat_id=CHANNEL_ID,
-            text=build_in_text_post(),
-            parse_mode="HTML",
-            disable_web_page_preview=True
-        )
-        await message.reply("✅ Text-Button Post Channel mein bhej diya gaya!")
-    except Exception as e:
-        await message.reply(f"❌ Channel Error: {e}")
-
-# ==========================================================
-# 🎨 MODE 2: EXACT SCREENSHOT (Image + Text Inside 1 Box, NO Grey Buttons)
-# ==========================================================
-def build_caption_with_in_text_links() -> str:
-    return (
-        f"🔥 <b><a href='{PREMIUM_URL}'>{CHANNEL_TITLE}</a> — {POST_TITLE}</b>\n\n"
-        f"⚡ <a href='{PREMIUM_URL}'><b>JOIN FREE</b></a>  |  "
-        f"🚀 <a href='{PREMIUM_URL}'><b>START HERE</b></a>  |  "
-        f"👑 <a href='{PREMIUM_URL}'><b>UNLOCK VIP</b></a>"
     )
 
 @dp.message(Command("here_inside"))
 async def send_here_inside(message: types.Message):
-    img_bytes = generate_exact_inside_card()
-    photo = BufferedInputFile(img_bytes, filename="inside_card.png")
-    # show_caption_above_media=True se Text UPAR aayega aur Card NEECHE (Exact Abigail screenshot jaisa!)
-    # Aur koi bahari grey button nahi hoga!
-    await message.answer_photo(
-        photo=photo,
-        caption=build_caption_with_in_text_links(),
-        parse_mode="HTML",
-        show_caption_above_media=True
-    )
-
-@dp.message(Command("post_inside"))
-async def send_channel_inside(message: types.Message):
+    status = await message.reply("⏳ Generating Exact Graphic Box...")
     try:
-        img_bytes = generate_exact_inside_card()
-        photo = BufferedInputFile(img_bytes, filename="inside_card.png")
-        await bot.send_photo(
-            chat_id=CHANNEL_ID,
+        img_bytes = generate_abigail_style_card()
+        photo = BufferedInputFile(img_bytes, filename="card.png")
+        # show_caption_above_media=True keeps Text Link on TOP and Card on BOTTOM inside 1 box!
+        await message.answer_photo(
             photo=photo,
-            caption=build_caption_with_in_text_links(),
+            caption=build_top_text_link(),
             parse_mode="HTML",
             show_caption_above_media=True
         )
-        await message.reply("✅ Exact Inside-Box Post Channel mein bhej diya gaya!")
+        await status.delete()
     except Exception as e:
-        await message.reply(f"❌ Channel Error: {e}")
+        await status.edit_text(f"❌ Error: {e}")
+
+@dp.message(Command("post_inside"))
+async def send_channel_inside(message: types.Message):
+    status = await message.reply("⏳ Sending to Channel...")
+    try:
+        img_bytes = generate_abigail_style_card()
+        photo = BufferedInputFile(img_bytes, filename="card.png")
+        await bot.send_photo(
+            chat_id=CHANNEL_ID,
+            photo=photo,
+            caption=build_top_text_link(),
+            parse_mode="HTML",
+            show_caption_above_media=True
+        )
+        await status.edit_text("✅ Successfully Sent to Channel!")
+    except Exception as e:
+        await status.edit_text(f"❌ Channel Error: {e}")
 
 # ==========================================================
-# 🌐 RENDER WEB SERVER
+# 🌐 RENDER KEEP-ALIVE WEB SERVER
 # ==========================================================
 async def handle_ping(request):
     return web.Response(text="Bot is Live!")
@@ -237,4 +267,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
