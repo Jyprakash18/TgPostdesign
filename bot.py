@@ -10,94 +10,136 @@ from aiogram.types import MessageEntity
 # ==========================================
 BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
 CHANNEL_ID = os.getenv("CHANNEL_ID", "@your_channel_username")
-PREMIUM_URL = "https://t.me/your_premium_link"  # Aapka apna link jo har button par lagega
+CHANNEL_TITLE = "🎬 MOVIE HUB"
+POST_TITLE = "LEAKED PREMIUM VAULT"
+PREMIUM_URL = "https://t.me/your_premium_link"
 # ==========================================
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Saved template (Jab aap post forward karenge toh bot use yahan yaad kar lega)
 SAVED_TEXT = None
 SAVED_ENTITIES = None
 
-def replace_links_in_entities(entities: list[MessageEntity], new_url: str) -> list[MessageEntity]:
-    """Post ke saare Custom Emojis (Buttons/Boxes) ko waisa hi rakhta hai, bas unke andar ka Link aapke PREMIUM_URL se badal deta hai!"""
-    if not entities:
-        return []
-    new_entities = []
-    for ent in entities:
-        # Copy entity
-        ent_dict = ent.model_dump()
-        if ent.type == "text_link":
-            ent_dict["url"] = new_url
-        new_entities.append(MessageEntity(**ent_dict))
-    return new_entities
+def generate_text_post_structure() -> str:
+    """
+    Bina kisi Photo ke 100% Text-based 6-Box Grid + 6 Clickable Text Buttons
+    generate karta hai (Jismein har item par PREMIUM_URL laga hai).
+    """
+    return (
+        f"<b><a href='{PREMIUM_URL}'>{CHANNEL_TITLE}</a> — {POST_TITLE}</b>\n\n"
+        f"<code>┌───────────────┬───────────────┐</code>\n"
+        f"<code>│</code> 💋 <a href='{PREMIUM_URL}'><b>KISS</b></a>       <code>│</code> 💝 <a href='{PREMIUM_URL}'><b>ONLY FOR</b></a>   <code>│</code>\n"
+        f"<code>│</code> <a href='{PREMIUM_URL}'><b>COMPILATION</b></a>  <code>│</code>    <a href='{PREMIUM_URL}'><b>YOU</b></a> 🔥    <code>│</code>\n"
+        f"<code>├───────────────┼───────────────┤</code>\n"
+        f"<code>│</code> 🎬 <a href='{PREMIUM_URL}'><b>FULL</b></a>       <code>│</code> 🔥 <a href='{PREMIUM_URL}'><b>LIVE CAMS</b></a>  <code>│</code>\n"
+        f"<code>│</code> <a href='{PREMIUM_URL}'><b>MOVIES</b></a> 🍿     <code>│</code>    <a href='{PREMIUM_URL}'><b>WATCH</b></a> 📸  <code>│</code>\n"
+        f"<code>├───────────────┼───────────────┤</code>\n"
+        f"<code>│</code> 💎 <a href='{PREMIUM_URL}'><b>HD</b></a>         <code>│</code> 🔞 <a href='{PREMIUM_URL}'><b>FREE</b></a>       <code>│</code>\n"
+        f"<code>│</code> <a href='{PREMIUM_URL}'><b>CONTENT</b></a> 📺    <code>│</code> <a href='{PREMIUM_URL}'><b>VIDEOS</b></a> 🔓     <code>│</code>\n"
+        f"<code>└───────────────┴───────────────┘</code>\n\n"
+        f"<b>Get Full Access Now</b> ⤵️\n\n"
+        f"        ⚡ 🪽 <a href='{PREMIUM_URL}'><b>JOIN FREE</b></a> 🪽 ⚡\n\n"
+        f"       ⚡ 🪽 <a href='{PREMIUM_URL}'><b>START HERE</b></a> 🪽 ⚡\n\n"
+        f"       ⚡ 🪽 <a href='{PREMIUM_URL}'><b>UNLOCK VIP</b></a> 🪽 ⚡\n\n"
+        f"         ⚡ 🪽 <a href='{PREMIUM_URL}'><b>EXPLORE</b></a> 🪽 ⚡\n\n"
+        f"       ⚡ 🪽 <a href='{PREMIUM_URL}'><b>ENTER NOW</b></a> 🪽 ⚡\n\n"
+        f"       ⚡ 🪽 <a href='{PREMIUM_URL}'><b>JOIN CLUB</b></a> 🪽 ⚡"
+    )
 
+# ==========================================================
+# 👋 /start COMMAND
+# ==========================================================
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     await message.reply(
-        "🔥 <b>Custom Emoji Post Cloner & Generator Ready!</b>\n\n"
-        "<b>Kaise Use Karein (100% Exact Post Ke Liye):</b>\n"
-        "1️⃣ <code>https://t.me/pbv2v3omvm0/3</code> par jayein aur us post ko <b>is Bot ko Forward karein</b> (Ya Copy-Paste karke bhejein).\n"
-        "2️⃣ Bot turant uske saare Custom Emoji Boxes & Colorful Buttons ke andar <b>aapka PREMIUM_URL</b> laga kar wapas bhej dega!\n"
-        "3️⃣ Phir /post_channel dabayein channel mein bhejne ke liye!",
+        "✅ <b>Pure Text Post Generator Bot Ready!</b>\n\n"
+        "<b>Direct Commands:</b>\n"
+        "👉 /generate - Yahi chat mein Pure Text Post (Grid + 6 Text Buttons) generate karein\n"
+        "👉 /post_channel - Direct apne Telegram Channel mein post bhejein\n\n"
+        "<b>Custom Emoji Cloner:</b>\n"
+        "💡 <i>Agar aap kisi doosre channel ka post yahan Forward ya Copy-Paste karenge, toh bot uske saare links badal kar aapka PREMIUM_URL laga dega!</i>",
         parse_mode="HTML"
     )
 
+# ==========================================================
+# ⚡ /generate - DIRECT YAHI CHAT MEIN POST BANAYEIN
+# ==========================================================
+@dp.message(Command("generate"))
+async def cmd_generate(message: types.Message):
+    post_html = generate_text_post_structure()
+    await message.answer(
+        text=post_html,
+        parse_mode="HTML",
+        disable_web_page_preview=True
+    )
+
+# ==========================================================
+# 📢 /post_channel - DIRECT CHANNEL MEIN BHEJEIN
+# ==========================================================
 @dp.message(Command("post_channel"))
-async def post_to_channel(message: types.Message):
+async def cmd_post_channel(message: types.Message):
     global SAVED_TEXT, SAVED_ENTITIES
-    if not SAVED_TEXT:
-        await message.reply("⚠️ Pehle woh post is bot ko Forward ya Copy-Paste karke bhejein!")
-        return
     try:
-        await bot.send_message(
-            chat_id=CHANNEL_ID,
-            text=SAVED_TEXT,
-            entities=SAVED_ENTITIES,
-            disable_web_page_preview=True
-        )
-        await message.reply("✅ 100% Exact Post aapke Channel mein bhej diya gaya!")
+        # Agar user ne koi custom emoji post forward kiya tha, toh woh bhejein, warna default structure bhejein
+        if SAVED_TEXT:
+            await bot.send_message(
+                chat_id=CHANNEL_ID,
+                text=SAVED_TEXT,
+                entities=SAVED_ENTITIES,
+                disable_web_page_preview=True
+            )
+        else:
+            await bot.send_message(
+                chat_id=CHANNEL_ID,
+                text=generate_text_post_structure(),
+                parse_mode="HTML",
+                disable_web_page_preview=True
+            )
+        await message.reply("✅ Post Successfully Channel mein bhej diya gaya!")
     except Exception as e:
-        await message.reply(f"❌ Channel Error: {e}")
+        await message.reply(
+            f"❌ <b>Channel Error:</b> {e}\n\n"
+            f"👉 <i>Check karein ki bot channel mein Admin hai aur CHANNEL_ID sahi hai.</i>",
+            parse_mode="HTML"
+        )
 
-# Jab bhi aap koi Custom Emoji / Text-Button wala post bot ko Forward ya Paste karenge:
+# ==========================================================
+# 🔄 AUTO-CLONER (Forward ya Copy-Paste karne par Link Replace karega)
+# ==========================================================
 @dp.message(F.text | F.caption)
-async def clone_custom_emoji_post(message: types.Message):
+async def clone_any_post(message: types.Message):
     global SAVED_TEXT, SAVED_ENTITIES
-
-    # Commands ko ignore karein
-    if (message.text and message.text.startswith("/")) or (message.caption and message.caption.startswith("/")):
-        return
 
     raw_text = message.text or message.caption
-    raw_entities = message.entities or message.caption_entities
+    if raw_text.startswith("/"):
+        return
 
-    # Saare links ko aapke PREMIUM_URL se replace karein (Custom Emojis 100% safe rahenge!)
-    updated_entities = replace_links_in_entities(raw_entities, PREMIUM_URL)
+    raw_entities = message.entities or message.caption_entities or []
+    updated_entities = []
+
+    for ent in raw_entities:
+        data = ent.model_dump()
+        if ent.type in ("text_link", "url"):
+            data["type"] = "text_link"
+            data["url"] = PREMIUM_URL
+        updated_entities.append(MessageEntity(**data))
 
     SAVED_TEXT = raw_text
     SAVED_ENTITIES = updated_entities
 
-    # 1. Turant chat mein naya post bhejein (Bina Forward tag ke + Aapke Link ke saath!)
     await message.answer(
         text=SAVED_TEXT,
         entities=SAVED_ENTITIES,
         disable_web_page_preview=True
     )
-
-    # 2. HTML Code bhi dikhayein taaki aap Title/Text edit kar sakein
-    await message.reply(
-        "✅ <b>Done! Upar wala post 100% aapke link ke saath tayar hai!</b>\n"
-        "👉 Channel mein bhejne ke liye /post_channel dabayein.",
-        parse_mode="HTML"
-    )
+    await message.reply("✅ <b>Links Replaced with your PREMIUM_URL!</b>\nChannel mein bhejne ke liye /post_channel dabayein.", parse_mode="HTML")
 
 # ==========================================================
 # 🌐 RENDER KEEP-ALIVE WEB SERVER
 # ==========================================================
 async def handle_ping(request):
-    return web.Response(text="Bot is Live!")
+    return web.Response(text="Bot is Running!")
 
 async def start_web_server():
     app = web.Application()
