@@ -18,26 +18,24 @@ PREMIUM_URL = "https://t.me/your_premium_link"
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Agar aap woh original Custom Emoji Box wala message bot ko forward karenge, toh woh yahan save ho jayega:
 SAVED_CUSTOM_TEXT = None
 SAVED_CUSTOM_ENTITIES = None
 
 def get_pure_text_box_message() -> str:
     """
     100% Pure Text Message (NO IMAGE!).
-    Ismein har line exact barabar width (Monospace + Clickable Links) mein hai taaki box kabhi na toote!
+    Ismein <code> ke andar clickable links hain taaki mobile par 6-Box ki ek bhi line aage-peeche na ho!
     """
     return (
         f"<b><a href='{PREMIUM_URL}'>{POST_HEADER}</a></b>\n\n"
-        f"<code>╭──────────────┬──────────────╮</code>\n"
-        f"<code>│ </code><a href='{PREMIUM_URL}'><b>HARDCORE 👀</b></a><code>  │ </code><a href='{PREMIUM_URL}'><b>TEENAGER 🔞</b></a><code>  │</code>\n"
-        f"<code>├──────────────┼──────────────┤</code>\n"
-        f"<code>│ </code><a href='{PREMIUM_URL}'><b>SPY CAM 📸</b></a><code>   │ </code><a href='{PREMIUM_URL}'><b>CHEATING ❤️‍🩹</b></a><code>  │</code>\n"
-        f"<code>├──────────────┼──────────────┤</code>\n"
-        f"<code>│ </code><a href='{PREMIUM_URL}'><b>MASSAGE 🥵</b></a><code>   │ </code><a href='{PREMIUM_URL}'><b>CASTING 🎬</b></a><code>   │</code>\n"
-        f"<code>╰──────────────┴──────────────╯</code>\n\n"
-        f"<b><a href='{PREMIUM_URL}'>{ADULT_TEXT}</a></b>\n\n"
-        f"<blockquote>      👉 <a href='{PREMIUM_URL}'><b>C L I C K   H E R E</b></a> 👅 ↗      </blockquote>"
+        f"<code>╭─────────────┬─────────────╮</code>\n"
+        f"<code>│ </code><a href='{PREMIUM_URL}'><code>HARDCORE</code></a> 👀<code> │ </code><a href='{PREMIUM_URL}'><code>TEENAGER</code></a> 🔞<code> │</code>\n"
+        f"<code>├─────────────┼─────────────┤</code>\n"
+        f"<code>│ </code><a href='{PREMIUM_URL}'><code>SPY CAM </code></a> 📸<code> │ </code><a href='{PREMIUM_URL}'><code>CHEATING</code></a> ❤️‍🩹<code> │</code>\n"
+        f"<code>├─────────────┼─────────────┤</code>\n"
+        f"<code>│ </code><a href='{PREMIUM_URL}'><code>MASSAGE </code></a> 🥵<code> │ </code><a href='{PREMIUM_URL}'><code>CASTING </code></a> 🎬<code> │</code>\n"
+        f"<code>╰─────────────┴─────────────╯</code>\n\n"
+        f"<b><a href='{PREMIUM_URL}'>{ADULT_TEXT}</a></b>"
     )
 
 def get_bottom_button() -> InlineKeyboardMarkup:
@@ -46,7 +44,7 @@ def get_bottom_button() -> InlineKeyboardMarkup:
     ])
 
 # ==========================================================
-# 👋 /start COMMAND (Pure Hindi/Hinglish Text Message)
+# 👋 /start COMMAND
 # ==========================================================
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
@@ -54,8 +52,7 @@ async def cmd_start(message: types.Message):
         "✅ <b>100% Pure Text Post Bot Ready! (No Image!)</b>\n\n"
         "👉 /generate - Yahi chat mein <b>Pure Text Message</b> (6-Box + Link) banayein\n"
         "👉 /post_channel - Direct apne Channel mein Text Post bhejein\n\n"
-        "💡 <b>Pro Trick (Exact Custom Emoji Box ke liye):</b>\n"
-        "Us channel (<i>Premierm Support</i> ya <i>Abigail</i>) ka post Copy ya Forward karke is bot mein bhejein—bot uske Custom Emoji Box ko 100% Text mein aapke link ke saath set kar dega!",
+        "💡 <b>Pro Trick:</b> Kisi bhi channel ka Custom Emoji Box wala post yahan Forward ya Copy-Paste karein—bot use aapke link ke saath clone kar dega!",
         parse_mode="HTML"
     )
 
@@ -66,7 +63,6 @@ async def cmd_start(message: types.Message):
 async def cmd_generate(message: types.Message):
     global SAVED_CUSTOM_TEXT, SAVED_CUSTOM_ENTITIES
 
-    # Agar aapne original post forward kiya hua hai, toh 100% wahi Custom Emoji Text Box bhejega:
     if SAVED_CUSTOM_TEXT:
         await message.answer(
             text=SAVED_CUSTOM_TEXT,
@@ -75,7 +71,6 @@ async def cmd_generate(message: types.Message):
             reply_markup=get_bottom_button()
         )
     else:
-        # Warna built-in Pure Text 6-Box Message bhejega (Bina kisi Image ke!):
         await message.answer(
             text=get_pure_text_box_message(),
             parse_mode="HTML",
@@ -118,7 +113,7 @@ async def clone_exact_text_box(message: types.Message):
     global SAVED_CUSTOM_TEXT, SAVED_CUSTOM_ENTITIES
 
     raw_text = message.text or message.caption
-    if raw_text.startswith("/"):
+    if not raw_text or raw_text.startswith("/"):
         return
 
     raw_entities = message.entities or message.caption_entities or []
@@ -134,7 +129,6 @@ async def clone_exact_text_box(message: types.Message):
     SAVED_CUSTOM_TEXT = raw_text
     SAVED_CUSTOM_ENTITIES = new_entities
 
-    # Turant 100% Text Message wapas bhejein
     await message.answer(
         text=SAVED_CUSTOM_TEXT,
         entities=SAVED_CUSTOM_ENTITIES,
@@ -148,7 +142,7 @@ async def clone_exact_text_box(message: types.Message):
     )
 
 # ==========================================================
-# 🌐 RENDER KEEP-ALIVE WEB SERVER
+# 🌐 RENDER KEEP-ALIVE WEB SERVER (Fast Deploy Fix)
 # ==========================================================
 async def handle_ping(request):
     return web.Response(text="Bot is Live!")
@@ -165,7 +159,7 @@ async def start_web_server():
 async def main():
     await start_web_server()
     await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
+    await dp.start_polling(bot, handle_signals=False)
 
 if __name__ == "__main__":
     asyncio.run(main())
